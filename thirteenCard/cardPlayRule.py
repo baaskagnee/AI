@@ -73,13 +73,23 @@ class Table:
             return "No cards have been played yet."
         return ', '.join(map(str, self.played_cards))
 
+# AI player class
+class AIPlayer(Player):
+    def __init__(self, name, hand):
+        super().__init__(name, hand)
+
+    def play_card(self):
+        # AI will play the lowest card in its hand
+        if self.hand:
+            return self.hand.pop(0)  # Simple strategy: play the lowest card
+        return None
+
 # GUI for the game
 class ThirteenGameGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Thirteen Card Game")
         self.root.geometry("1000x800")
-        
 
         # Тоглоомын товч болон гарах картын мэдээллийг харуулах
         self.start_button = tk.Button(root, text="Start Game", command=self.start_game)
@@ -121,12 +131,12 @@ class ThirteenGameGUI:
         self.start_button.config(state=tk.DISABLED)
         self.hang_out.config()
         hands = self.deck.deal()
-        self.players = [Player(f'Player {i+1}', hand) for i, hand in enumerate(hands)]
-        
+        self.players = [Player('You', hands[0]), AIPlayer('Opponent', hands[1])]  # AI player added
+
         # Тоглогч бүрийн гарын хөзрийг эрэмбэлэх
         for player in self.players:
             player.sort_hand()
-        
+
         self.table = Table(self.players)  # Initialize the table with players
         self.current_player = 0
         self.update_ui()
@@ -137,6 +147,10 @@ class ThirteenGameGUI:
         self.player_label.config(text=f"{player.name}'s Turn")
         self.show_hand(opponent, self.opponent_hand_frame)
         self.show_hand(player, self.hand_frame)
+
+        # If it's the AI's turn, let it play a card
+        if isinstance(player, AIPlayer):
+            self.root.after(1000, self.ai_play_card)
 
     def show_hand(self, player, frame):
         # Өмнөх гарын дисплейг цэвэрлэх
@@ -165,7 +179,6 @@ class ThirteenGameGUI:
                 card_label.image = photo  # Гаражийн цуглуулгаас сэргийлэх
                 card_label.grid(row=0, column=i)
 
-
     def update_card_button_style(self, card, highlight=False):
         for widget in self.hand_frame.winfo_children():
             if isinstance(widget, tk.Button) and hasattr(widget, 'card') and widget.card == card:
@@ -182,51 +195,28 @@ class ThirteenGameGUI:
             self.selected_cards.append(card)  # Шинээр карт сонгох үед жагсаалтад нэмнэ
             self.update_card_button_style(card, highlight=True)  # Картын товчлуурын хэтэвчийг идэвхжүүлнэ
 
-        # Сонгосон картуудын жагсаалтыг харуулах
-        self.selected_card_label.config(text=f"Selected: {', '.join(map(str, self.selected_cards))}")
-
-        # Хэрэв сонгосон картууд байгаа бол Play товчийг идэвхжүүлнэ
-        if self.selected_cards:
-            self.play_button.config(state=tk.NORMAL)
-        else:
-            self.play_button.config(state=tk.DISABLED)
-
+        # Сонгосон картуудын жагсаалтыг шинэчлэх
+        selected_card_names = ', '.join(map(str, self.selected_cards))
+        self.selected_card_label.config(text=f"Selected Cards: {selected_card_names}")
 
     def play_card(self):
         player = self.players[self.current_player]
         if self.selected_cards:
-            self.table.place_card(player, self.selected_cards)  # Place the selected cards on the table
-            self.selected_card_label.config(text=f"Played: {', '.join(map(str, self.selected_cards))}")
-            self.selected_cards.clear()  # Clear the selected cards
-            self.play_button.config(state=tk.DISABLED)
+            self.table.place_card(player, self.selected_cards)  # Суллаж буй картуудаа тавина
+            self.selected_cards.clear()  # Тоглоомын дараа сонгосон картуудаа цэвэрлэнэ
+            self.selected_card_label.config(text="")
+            self.update_ui()  # UI-ийг шинэчлэх
 
-            # Update the UI for the next player
-            self.current_player = (self.current_player + 1) % len(self.players)
-            self.update_ui()
+    def ai_play_card(self):
+        player = self.players[self.current_player]
+        if isinstance(player, AIPlayer):
+            card = player.play_card()  # AI-с тоглоомын карт
+            if card:
+                self.table.place_card(player, [card])  # AI тоглогчийн карт
+                self.update_ui()  # UI-ийг шинэчлэх
 
-            # Update the played cards display
-            self.update_played_cards()
+        self.current_player = (self.current_player + 1) % len(self.players)  # Дараагийн тоглогч руу шилжүүлэх
 
-    def update_played_cards(self):
-        # Clear the frame before displaying new cards
-        for widget in self.played_cards_frame.winfo_children():
-            widget.destroy()
-
-        # Display all played cards
-        for i, card in enumerate(self.table.played_cards):
-            image = Image.open(card.image_path)
-            image = image.resize((60, 100), Image.LANCZOS)
-            photo = ImageTk.PhotoImage(image)
-
-            card_label = tk.Label(self.played_cards_frame, image=photo)
-            card_label.image = photo
-            card_label.grid(row=0, column=i)
-
-            # Highlight the most recent cards (last played)
-            if card in self.table.last_played_cards:
-                card_label.config(borderwidth=2, relief="solid", bg="yellow")  # Highlight recent cards
-
-# Тоглоомыг эхлүүлэх
 if __name__ == "__main__":
     root = tk.Tk()
     game = ThirteenGameGUI(root)
