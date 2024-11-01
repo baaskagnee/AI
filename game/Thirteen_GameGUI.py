@@ -225,6 +225,7 @@ class ThirteenGameGUI:
         self.current_player = (self.current_player + 1) % len(self.players)
         self.update_ui()
         self.update_played_cards()
+
     def play_card(self):
         player = self.players[self.current_player]
 
@@ -252,6 +253,25 @@ class ThirteenGameGUI:
                     print("Анхаар!", "Сонгосон хөзрүүд тоглогчийн гарт байх ёстой.")
                     self.selected_cards.clear()
                     return  # Allow retry
+            elif len(self.selected_cards) == 3:
+                card1, card2, card3 = self.selected_cards
+                
+                # Check if all selected cards are in the player's hand
+                if card1 in player.hand and card2 in player.hand and card3 in player.hand:
+                    self.table.played_cards.clear()  # Clear previously played cards
+                    
+                    # Check if all three cards have the same value
+                    if card1.value == card2.value == card3.value:
+                        # Place the cards on the table
+                        self.table.place_card(player, card1)
+                        self.table.place_card(player, card2)
+                        self.table.place_card(player, card3)
+                    else:
+                        print("Анхаар!", "Гурван хөзөрийн утгууд ижил байх ёстой.")  # Warning: All three card values must be the same
+                        self.selected_cards.clear()
+                        return  # Allow retry
+
+
         else:
             # If cards have been played, enforce higher card requirement
             if len(self.selected_cards) == len(self.table.played_cards):
@@ -284,37 +304,45 @@ class ThirteenGameGUI:
                             return  # Allow retry
                     elif len(self.selected_cards) == 3:
                         card1, card2, card3 = self.selected_cards
+                        
+                        # Check if all selected cards are in the player's hand
                         if card1 in player.hand and card2 in player.hand and card3 in player.hand:
-                            self.table.played_cards.clear()
-                            if card1.value == card2.value == card3 :
+                            self.table.played_cards.clear()  # Clear previously played cards
+                            
+                            # Check if all three cards have the same value
+                            if card1.value == card2.value == card3.value:
+                                # Place the cards on the table
                                 self.table.place_card(player, card1)
                                 self.table.place_card(player, card2)
                                 self.table.place_card(player, card3)
-                                
                             else:
-                                print("Анхаар!", "Хоёр хөзөрийн утгууд ижил байх ёстой.")
+                                print("Анхаар!", "Гурван хөзөрийн утгууд ижил байх ёстой.")  # Warning: All three card values must be the same
                                 self.selected_cards.clear()
                                 return  # Allow retry
                         else:
-                            print("Анхаар!", "Сонгосон хөзрүүд тоглогчийн гарт байх ёстой.")
+                            print("Анхаар!", "Сонгосон хөзрүүд тоглогчийн гарт байх ёстой.")  # Warning: Selected cards must be in player's hand
                             self.selected_cards.clear()
                             return  # Allow retry
-                else:
-                    print("Анхаар!", "Таны сонгосон хөзөр өмнөхөөсөө өндөр утгатай байх ёстой.")
-                    self.selected_cards.clear()
-                    return  # Allow retry
+                    else:
+                        print("Анхаар!", "Таны сонгосон хөзөр өмнөхөөсөө өндөр утгатай байх ёстой.")  # Warning: Selected cards must be higher than the previous ones
+                        self.selected_cards.clear()
+                        return  # Allow retry
             else:
-                print("Анхаар!", "Сонгосон хөзрийн тоо нь ширээн дээрхтэй тохирох ёстой.")
-                self.selected_cards.clear()
-                return  # Allow retry
+                print("тоглох хөзрийн тоо таарахгүй байна")
+                return
+
 
         # Update the UI after a successful play
-        self.selected_card_label.config(text=f"Played: {', '.join(map(str, self.selected_cards))}")
-        self.selected_cards.clear()
-        self.play_button.config(state=tk.DISABLED)
-        self.current_player = (self.current_player + 1) % len(self.players)
-        self.update_ui()
-        self.update_played_cards()
+        if len(self.players[self.current_player].hand) == 0:  # Accessing the player's hand correctly
+            print("game over")
+        else:
+            self.selected_card_label.config(text=f"Played: {', '.join(map(str, self.selected_cards))}")
+            self.selected_cards.clear()
+            self.play_button.config(state=tk.DISABLED)
+            self.current_player = (self.current_player + 1) % len(self.players)
+            self.update_ui()
+            self.update_played_cards()
+
 
     def toggle_card_selection(self, card):
         if card in self.selected_cards:
