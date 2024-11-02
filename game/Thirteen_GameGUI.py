@@ -1,9 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, Canvas
-import random
+from tkinter import messagebox
 from PIL import Image, ImageTk
+import random
 
-# Картуудын утга болон өнгийг тодорхойлох
+# Define card suits and values
 SUITS = {
     'diamonds': 1,
     'clubs': 2,
@@ -38,20 +38,11 @@ class Card:
 
 class Deck:
     def __init__(self):
-        self.cards = []
-        for value in VALUES:
-            for suit in SUITS:
-                card = Card(value, suit)
-                self.cards.append(card)
+        self.cards = [Card(value, suit) for value in VALUES for suit in SUITS]
         random.shuffle(self.cards)
 
     def deal(self):
-        hands = [[] for _ in range(2)]
-        for index, card in enumerate(self.cards):
-            player_index = index % 2
-            if index < 26:
-                hands[player_index].append(card)
-        return hands
+        return [self.cards[:26], self.cards[26:]]
 
 class Player:
     def __init__(self, name, hand):
@@ -62,54 +53,77 @@ class Player:
         if card in self.hand:
             self.hand.remove(card)
             return card
-        else:
-            return None
-
-    def show_hand(self):
-        return ', '.join(map(str, self.hand))
+        return None
 
     def sort_hand(self):
-        # sort according to the VALUES and SUITS mappings
         self.hand.sort(key=lambda card: (VALUES[card.value], SUITS[card.suit]))
 
 class Table:
-    def __init__(self, players):
-        self.players = players
+    def __init__(self):
         self.played_cards = []
 
     def place_card(self, player, card):
         if card in player.hand:
             player.play_card(card)
             self.played_cards.append(card)
-        else:
-            print(f"Card {card} not found in {player.name}'s hand.")
 
     def start_new_round(self):
         self.played_cards.clear()
 
-    def show_played_cards(self):
-        if not self.played_cards:
-            return "No cards have been played yet."
-        return ', '.join(map(str, self.played_cards))
+class CardMan:
+    def __init__(self, name, hand):
+        self.name = name
+        self.hand = hand
+        self.opponent_hand = []
 
-    def reset_table(self):
-        self.played_cards.clear()
+    def play_turn(self, opponent_played_cards):
+        if opponent_played_cards:
+            if len(opponent_played_cards) == 5:
+                possible_cards = self.find_best_sequence()
+                if possible_cards:
+                    return possible_cards
+            else:
+                opponent_card_value = VALUES[opponent_played_cards[0].value]
+                higher_cards = [card for card in self.hand if VALUES[card.value] > opponent_card_value]
+                if higher_cards:
+                    best_card = min(higher_cards, key=lambda card: VALUES[card.value])
+                    self.hand.remove(best_card)
+                    return [best_card]
+                
+        if len(self.hand) <= len(self.opponent_hand):
+            return "pass"
+        else:
+            lowest_card = min(self.hand, key=lambda card: VALUES[card.value])
+            self.hand.remove(lowest_card)
+            return [lowest_card]
+
+    def find_best_sequence(self):
+        sorted_hand = sorted(self.hand, key=lambda card: (VALUES[card.value], SUITS[card.suit]))
+        for i in range(len(sorted_hand) - 4):
+            sequence = sorted_hand[i:i+5]
+            validator = FiveCardValidator(sequence)
+            if validator.is_sequence() and validator.is_same_suit():
+                for card in sequence:
+                    self.hand.remove(card)
+                return sequence
+        return None
+
+    def evaluate_move(self):
+        return len(self.hand)
+    
+    def pass_turn(self):
+        return []
+
 class FiveCardValidator:
     def __init__(self, cards):
         self.cards = cards
 
     def is_sequence(self):
-        """Хөзрүүд дараалсан байх эсэхийг шалгана"""
         values = sorted([VALUES[card.value] for card in self.cards])
-        for i in range(len(values) - 1):
-            if values[i] + 1 != values[i + 1]:
-                return False
-        return True
+        return all(values[i] + 1 == values[i + 1] for i in range(len(values) - 1))
 
     def is_same_suit(self):
-        """Хөзрүүд ижил өнгөтэй эсэхийг шалгана"""
-        first_suit = self.cards[0].suit
-        return all(card.suit == first_suit for card in self.cards)
+        return all(card.suit == self.cards[0].suit for card in self.cards)
 
 class ThirteenGameGUI:
     def __init__(self, root):
@@ -149,40 +163,48 @@ class ThirteenGameGUI:
         self.deck = Deck()
         self.players = []
 
+    def start_game(self):
+        self.start_button.config(state=tk.DISABLED)
+        hands = self.deck.deal()
+        self.players = [
+            Player('You', hands[0]),
+            Player('CardMan', hands[1])
+        ]
+        for player in self.players:
+            player.sort_hand()
+
+        lowest_card_player = self.find_lowest_card_player()
+        print(f"Player with the lowest card: {lowest_card_player} starts the game.")
+        self.current_player = next(i for i, player in enumerate(self.players) if player.name == lowest_card_player)
+        
+        # Automatically play the first card of the starting player
+        self.play_card()
+        self.update_ui()
+        # lowest_card_player = self.find_lowest_card_player()
+        # print(lowest_card_player)
+        # self.current_player = next(i for i, player in enumerate(self.players) if player.name == lowest_card_player)  # Эхлэх тоглогчийг тохируулах
+        # self.play_card()
+
+        # self.update_ui()
+        # print(f"Хамгийн бага хөзөртэй тоглогч: {lowest_card_player} эхэлж байна.")
+        # self.play_card()
     def find_lowest_card_player(self):
         lowest_card_player = None
         lowest_card_value = None
 
         for player in self.players:
+            # Check if the player has cards in hand
             if player.hand:
+                # Get the first card in their sorted hand (lowest card)
                 first_card = player.hand[0]
                 card_value = VALUES[first_card.value]
 
+                # If this card has the lowest value encountered so far, update lowest_card_player
                 if lowest_card_value is None or card_value < lowest_card_value:
                     lowest_card_value = card_value
                     lowest_card_player = player.name
 
         return lowest_card_player
-
-    def start_game(self):
-        self.start_button.config(state=tk.DISABLED)
-        hands = self.deck.deal()
-        self.players = [
-            Player('Хүн', hands[0]),
-            Player('Машин', hands[1])
-        ]
-
-        for player in self.players:
-            player.sort_hand()
-        self.table = Table(self.players)
-        self.current_player = 0
-        self.update_ui()
-
-        lowest_card_player = self.find_lowest_card_player()
-        self.current_player = next(i for i, player in enumerate(self.players) if player.name == lowest_card_player)
-        self.play_card()
-
-        self.update_ui()
 
     def update_ui(self):
         player = self.players[self.current_player]
@@ -219,164 +241,32 @@ class ThirteenGameGUI:
             self.selected_cards.append(card)
 
         self.selected_card_label.config(text=f"Selected: {', '.join(map(str, self.selected_cards))}")
-
-        if self.selected_cards:
-            self.play_button.config(state=tk.NORMAL)
-        else:
-            self.play_button.config(state=tk.DISABLED)
+        self.play_button.config(state=tk.NORMAL if self.selected_cards else tk.DISABLED)
 
     def pass_card(self):
-        self.table.played_cards.clear()
         self.selected_cards.clear()
         self.current_player = (self.current_player + 1) % len(self.players)
         self.update_ui()
-        self.update_played_cards()
 
-    
     def play_card(self):
         player = self.players[self.current_player]
-
+        
         if len(self.selected_cards) not in {1, 2, 3, 5}:
-            self.selected_card_label.config(text="You can only play 1, 2, 3, or 5 cards.")
-            self.selected_cards.clear()
-            return 
-        # validator = HandValidator(self.selected_cards)
-    
-        if len(self.table.played_cards) == 0:
-            if len(self.selected_cards) == 1:
-                card = self.selected_cards[0]
-                if card in player.hand:
-                    self.table.place_card(player, card)
-                else:
-                    self.selected_cards.clear()
-                    return
-            elif len(self.selected_cards) == 2:
-                card1, card2 = self.selected_cards
-                if card1 in player.hand and card2 in player.hand:
-                    if card1.value == card2.value:
-                        self.table.place_card(player, card1)
-                        self.table.place_card(player, card2)
-                    else:
-                        self.selected_cards.clear()
-                        return
-                else:
-                    self.selected_cards.clear()
-                    return
-            elif len(self.selected_cards) == 3:
-                
-                card1, card2, card3 = self.selected_cards
-                if card1 in player.hand and card2 in player.hand and card3 in player.hand:
-                    if card1.value == card2.value == card3.value:
-                        self.table.place_card(player, card1)
-                        self.table.place_card(player, card2)
-                        self.table.place_card(player, card3)
-                    else:
-                        self.selected_cards.clear()
-                        return
-            elif len(self.selected_cards) == 5:
-                validator = FiveCardValidator(self.selected_cards)
-                if validator.is_same_suit():
-                    for card in self.selected_cards:
-                        self.table.place_card(player, card)
-                    self.selected_cards.clear()
-                    self.selected_card_label.config(text="5 cards played.")
-                elif validator.is_sequence():
-                    for card in self.selected_cards:
-                        self.table.place_card(player, card)
-                    self.selected_cards.clear()
-                    self.selected_card_label.config(text="5 cards played.")
-                else:
-                    self.selected_card_label.config(text="5 cards must be a consecutive sequence and same suit.")
-                    self.selected_cards.clear()
-                    return
+            self.selected_card_label.config(text="Invalid selection. Choose 1, 2, 3, or 5 cards.")
+            return
 
-            # 1, 2, эсвэл 3 хөзөр сонгосон бол ижил утгатай эсэхийг шалгах
-            # elif not validator.is_same_value():
-            #     self.selected_card_label.config(text="Бүх картууд ижил утгатай байх ёстой.")
-            #     self.selected_cards.clear()
-            #     return
-        else:
-            if len(self.selected_cards) == len(self.table.played_cards):
-                if all(VALUES[self.selected_cards[i].value] > VALUES[self.table.played_cards[i].value] for i in range(len(self.selected_cards))):
+        if len(self.selected_cards) == 5:
+            
 
-                    if len(self.selected_cards) == 1:
-                        card = self.selected_cards[0]
-                        if card in player.hand:
-                            self.table.played_cards.clear()
-                            self.table.place_card(player, card)
-                        else:
-                            print("Анхаар!", "Сонгосон хөзөр тоглогчийн гарт байх ёстой.")
-                            self.selected_cards.clear()
-                            return  # Allow retry
-                    elif len(self.selected_cards) == 2:
-                        card1, card2 = self.selected_cards
-                        if card1 in player.hand and card2 in player.hand:
-                            self.table.played_cards.clear()
-                            if card1.value == card2.value:
-                                self.table.place_card(player, card1)
-                                self.table.place_card(player, card2)
-                                
-                            else:
-                                print("Анхаар!", "Хоёр хөзөрийн утгууд ижил байх ёстой.")
-                                self.selected_cards.clear()
-                                return  # Allow retry
-                        else:
-                            print("Анхаар!", "Сонгосон хөзрүүд тоглогчийн гарт байх ёстой.")
-                            self.selected_cards.clear()
-                            return  # Allow retry
-                    elif len(self.selected_cards) == 3:
-                        card1, card2, card3 = self.selected_cards
-                        
-                        # Check if all selected cards are in the player's hand
-                        if card1 in player.hand and card2 in player.hand and card3 in player.hand:
-                            self.table.played_cards.clear()  # Clear previously played cards
-                            
-                            # Check if all three cards have the same value
-                            if card1.value == card2.value == card3.value:
-                                # Place the cards on the table
-                                self.table.place_card(player, card1)
-                                self.table.place_card(player, card2)
-                                self.table.place_card(player, card3)
-                            else:
-                                print("Анхаар!", "Гурван хөзөрийн утгууд ижил байх ёстой.")  # Warning: All three card values must be the same
-                                self.selected_cards.clear()
-                                return  # Allow retry
-                        else:
-                            print("Анхаар!", "Сонгосон хөзрүүд тоглогчийн гарт байх ёстой.")  # Warning: Selected cards must be in player's hand
-                            self.selected_cards.clear()
-                            return  # Allow retry
-                    else:
-                        print("Анхаар!", "Таны сонгосон хөзөр өмнөхөөсөө өндөр утгатай байх ёстой.")  # Warning: Selected cards must be higher than the previous ones
-                        self.selected_cards.clear()
-                        return  # Allow retry
-                else:
-                    return
-            else:
-                self.selected_cards.clear()
-                return
+        for card in self.selected_cards:
+            self.table.place_card(player, card)
 
-        if len(self.players[self.current_player].hand) == 0:
-            print("game over")
-        else:
-            self.selected_card_label.config(text=f"Played: {', '.join(map(str, self.selected_cards))}")
-            self.selected_cards.clear()
-            self.play_button.config(state=tk.DISABLED)
-            self.current_player = (self.current_player + 1) % len(self.players)
-            self.update_ui()
-            self.update_played_cards()
+        self.selected_cards.clear()
+        self.current_player = (self.current_player + 1) % len(self.players)
+        self.update_ui()
 
-    def update_played_cards(self):
-        for widget in self.played_cards_frame.winfo_children():
-            widget.destroy() 
-
-        for i, card in enumerate(self.table.played_cards):
-            image = Image.open(card.image_path)
-            image = image.resize((60, 100), Image.LANCZOS)
-            photo = ImageTk.PhotoImage(image)
-            card_label = tk.Label(self.played_cards_frame, image=photo)
-            card_label.image = photo
-            card_label.grid(row=0, column=i)
-
-root = tk.Tk()
-game = ThirteenGameGUI(root)
-root.mainloop()
+# Main code to start the GUI
+if __name__ == "__main__":
+    root = tk.Tk()
+    game_gui = ThirteenGameGUI(root)
+    root.mainloop()
