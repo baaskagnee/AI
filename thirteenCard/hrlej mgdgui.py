@@ -94,22 +94,6 @@ class Table:
 
     def reset_table(self):
         self.played_cards.clear()
-class FiveCardValidator:
-    def __init__(self, cards):
-        self.cards = cards
-
-    def is_sequence(self):
-        """Хөзрүүд дараалсан байх эсэхийг шалгана"""
-        values = sorted([VALUES[card.value] for card in self.cards])
-        for i in range(len(values) - 1):
-            if values[i] + 1 != values[i + 1]:
-                return False
-        return True
-
-    def is_same_suit(self):
-        """Хөзрүүд ижил өнгөтэй эсэхийг шалгана"""
-        first_suit = self.cards[0].suit
-        return all(card.suit == first_suit for card in self.cards)
 
 class ThirteenGameGUI:
     def __init__(self, root):
@@ -232,16 +216,9 @@ class ThirteenGameGUI:
         self.update_ui()
         self.update_played_cards()
 
-    
     def play_card(self):
         player = self.players[self.current_player]
 
-        if len(self.selected_cards) not in {1, 2, 3, 5}:
-            self.selected_card_label.config(text="You can only play 1, 2, 3, or 5 cards.")
-            self.selected_cards.clear()
-            return 
-        # validator = HandValidator(self.selected_cards)
-    
         if len(self.table.played_cards) == 0:
             if len(self.selected_cards) == 1:
                 card = self.selected_cards[0]
@@ -263,7 +240,6 @@ class ThirteenGameGUI:
                     self.selected_cards.clear()
                     return
             elif len(self.selected_cards) == 3:
-                
                 card1, card2, card3 = self.selected_cards
                 if card1 in player.hand and card2 in player.hand and card3 in player.hand:
                     if card1.value == card2.value == card3.value:
@@ -273,28 +249,6 @@ class ThirteenGameGUI:
                     else:
                         self.selected_cards.clear()
                         return
-            elif len(self.selected_cards) == 5:
-                validator = FiveCardValidator(self.selected_cards)
-                if validator.is_same_suit():
-                    for card in self.selected_cards:
-                        self.table.place_card(player, card)
-                    self.selected_cards.clear()
-                    self.selected_card_label.config(text="5 cards played.")
-                elif validator.is_sequence():
-                    for card in self.selected_cards:
-                        self.table.place_card(player, card)
-                    self.selected_cards.clear()
-                    self.selected_card_label.config(text="5 cards played.")
-                else:
-                    self.selected_card_label.config(text="5 cards must be a consecutive sequence and same suit.")
-                    self.selected_cards.clear()
-                    return
-
-            # 1, 2, эсвэл 3 хөзөр сонгосон бол ижил утгатай эсэхийг шалгах
-            # elif not validator.is_same_value():
-            #     self.selected_card_label.config(text="Бүх картууд ижил утгатай байх ёстой.")
-            #     self.selected_cards.clear()
-            #     return
         else:
             if len(self.selected_cards) == len(self.table.played_cards):
                 if all(VALUES[self.selected_cards[i].value] > VALUES[self.table.played_cards[i].value] for i in range(len(self.selected_cards))):
@@ -349,8 +303,6 @@ class ThirteenGameGUI:
                         print("Анхаар!", "Таны сонгосон хөзөр өмнөхөөсөө өндөр утгатай байх ёстой.")  # Warning: Selected cards must be higher than the previous ones
                         self.selected_cards.clear()
                         return  # Allow retry
-                else:
-                    return
             else:
                 self.selected_cards.clear()
                 return
@@ -367,7 +319,7 @@ class ThirteenGameGUI:
 
     def update_played_cards(self):
         for widget in self.played_cards_frame.winfo_children():
-            widget.destroy() 
+            widget.destroy()
 
         for i, card in enumerate(self.table.played_cards):
             image = Image.open(card.image_path)
@@ -377,7 +329,6 @@ class ThirteenGameGUI:
             card_label.image = photo
             card_label.grid(row=0, column=i)
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    game = ThirteenGameGUI(root)
-    root.mainloop()
+root = tk.Tk()
+game = ThirteenGameGUI(root)
+root.mainloop()
