@@ -377,7 +377,6 @@ class ThirteenGameGUI:
             card_label.image = photo
             card_label.grid(row=0, column=i)
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    game = ThirteenGameGUI(root)
-    root.mainloop()
+root = tk.Tk()
+game = ThirteenGameGUI(root)
+root.mainloop()
