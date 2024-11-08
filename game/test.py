@@ -1,9 +1,10 @@
 # Ajillad baiga gui
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, Button,PhotoImage,Label
 import random
 from PIL import Image, ImageTk
-
+from collections import defaultdict
+from itertools import combinations
 
 # Define card values and suits
 SUITS = {
@@ -35,6 +36,20 @@ VALUES = {
     'A': 14,
     '2': 15
 }
+def bttn(parent, x, y, image_path, hover_image_path, command):
+    # Load images
+    try:
+        default_image = Image.open(image_path)
+        default_photo = ImageTk.PhotoImage(default_image)   
+        hover_image = Image.open(hover_image_path)
+        hover_photo = ImageTk.PhotoImage(hover_image)
+    except Exception as e:
+        print(f"Error loading button images: {e}")
+        return
+
+    button = Button(parent, image=default_photo, command=command, borderwidth=0)
+    button.image = default_photo  # Keep a reference to avoid garbage collection
+    button.place(x=x, y=y)
 
 class Card:
     def __init__(self, value, suit):
@@ -148,6 +163,7 @@ class AICardManager(Player):
         super().__init__(name, hand)
 
     def make_move(self, played_cards):
+        print("тоглогчийн тоглосон хөзрийн тоо:", len(played_cards))
         """Тоглогдсон хөзрөөс илүү утгатай хөзрийг сонгож буцаана."""
         # Тоглогдсон хөзрийн хамгийн том утгыг олно
         if len(played_cards) == 1:
@@ -163,46 +179,76 @@ class AICardManager(Player):
                 else:
                     # Илүү утгатай хөзөр байхгүй бол дамжуулна
                     return "pass"
-        elif not played_cards:  # Хэрэв эхний тоглолт бол
-            print("not played cards")
-            # Хэрэв тоглогдсон хөзөр байхгүй бол хамгийн бага хөзрийг тоглоно
-            lowest_card = min(self.hand, key=lambda card: VALUES[card.value])
-            return lowest_card
+        elif len(played_cards) == 0:  # When it's the first move
+            print("no cards played yet")
+            
+            # Check if AI has a five-card combo
+            five_card_combo = self.play_best_five_card_combo([])
+            if five_card_combo:
+                print("AI тоглогч 5 хөзрийн хослол тоглов.")
+                return five_card_combo
+            
+            # If no five-card combo, check if AI has a triple
+            triple = self.play_best_triple([])
+            if triple:
+                print("AI тоглогч гурвалсан хослол тоглов.")
+                return triple
+            
+            # If no triple, check if AI has a pair
+            pair = self.play_best_pair([])
+            if pair:
+                print("AI тоглогч хос хөзөр тоглов.")
+                return pair
+            
+            # If no combinations, play the highest single card
+            highest_card = max(self.hand, key=lambda card: VALUES[card.value])
+            print("AI тоглогч хамгийн өндөр хөзрийг тоглов.")
+            return highest_card
         elif len(played_cards) == 2:
-            # Хамгийн өндөр утгатай хосыг тоглох
+            # Нөгөө тоглогчийн хос хөзрийн эсрэг хамгийн өндөр хосыг тоглохыг оролд
             best_pair = self.play_best_pair(played_cards)
             if best_pair:
                 print(f"AI тоглогч тоглох хослол: {best_pair}")
                 return best_pair  # Хос хөзрийг буцаана
             else:
                 print("AI тоглогч дамжууллаа.")
-                return []  # Дамжуулах
+                return "pass"  # Тоглох боломжгүй бол дамжуулна
+                # Дамжуулах
         elif len(played_cards) == 3:
             card_triple = self.play_best_triple(played_cards)
             if card_triple:
                 print(f"AI тоглогч тоглох гурвалсан хослол: {card_triple}")
             else:
                 print("AI тоглогч тоглох боломжгүй байна.")
+                return "pass"
         elif len(played_cards) == 5:  # Нөгөө тоглогчийн 5 хөзрөөр тоглосон эсэхийг шалгана
             card_combo = self.play_best_five_card_combo(played_cards)
             if card_combo:
                 print(f"AI тоглогч тоглох 5 хөзрийн хослол: {card_combo}")
             else:
                 print("AI тоглогч тоглох боломжгүй байна.")
+                return None
 
     def play_best_pair(self, last_played_pair):
         """AI chooses the best pair to play against the opponent's pair."""
         # Collect pairs in hand
         pairs = self.find_multiples(2)
-        
-        # Evaluate the last played pair's value
-        last_pair_value = VALUES[last_played_pair[0].value]
-        # Find the first stronger pair to play
-        for pair in pairs:
-            if VALUES[pair[0].value] > last_pair_value:
-                return pair  # Play this pair
-        
-        return None  # No pair strong enough to play
+
+        if last_played_pair:
+            # Evaluate the last played pair's value
+            last_pair_value = VALUES[last_played_pair[0].value]
+            
+            # Find the first stronger pair to play
+            for pair in pairs:
+                if VALUES[pair[0].value] > last_pair_value:
+                    return pair  # Play this pair if it's stronger
+            
+            return None  # No pair strong enough to play
+
+        elif last_played_pair == []:
+            # If no pair has been played yet, play the strongest pair
+            return pairs[0] if pairs else None  # Return strongest pair or None if no pairs
+
     def find_multiples(self, count):
         """Гарт байгаа тодорхой тооны ижил утгатай хөзрүүдийн бүлгийг хайж буцаана."""
         multiples = []
@@ -219,21 +265,31 @@ class AICardManager(Player):
         return multiples
 
     def play_best_triple(self, last_played_triple):
-            """AI chooses the best triple (three of a kind) to play against the opponent's triple."""
-            # Collect triples in hand
-            triples = self.find_multiples(3)
-            
+        """AI chooses the best triple (three of a kind) to play against the opponent's triple, or plays any triple if it's the first move."""
+        # Collect triples in hand
+        triples = self.find_multiples(3)
+        
+        # If no triples are available, return None
+        if not triples:
+            return None
+        
+        # Check if there was a previously played triple
+        if last_played_triple:
             # Evaluate the last played triple's value
             last_triple_value = VALUES[last_played_triple[0].value]
-             
+            
             # Find the first stronger triple to play
             for triple in triples:
                 if VALUES[triple[0].value] > last_triple_value:
-                    for card in triple:
-                        self.hand.remove(card)
-                    return triple  # Play this triple
-            
-            return None  # No triple strong enough to play
+
+                    return triple  # Play this stronger triple
+        else:
+            # If no triple was previously played, play the lowest triple to use up cards
+            lowest_triple = min(triples, key=lambda triple: VALUES[triple[0].value])
+            return lowest_triple  # Play the lowest triple available
+
+        return   # No triple strong enough to play if none met the requirements
+
 
     def play_best_five_card_combo(self, last_played_combo):
         """AI хамгийн тохиромжтой 5 хөзрийн хослолыг тоглоно."""
@@ -246,38 +302,49 @@ class AICardManager(Player):
             return None  # Тоглох боломжгүй бол ямар ч хослолыг тоглохгүй
         
     def choose_five_card_combo(self, last_played_combo):
-        """AI нь нөгөө тоглогчийн тоглосон 5 хөзрийн хослолтой харьцуулах хослолыг сонгоно."""
+        """AI selects a five-card combo that can beat the opponent's last played combo."""
         if len(self.hand) < 5:
-            return None  # Гаранд 5-аас доош хөзөр байгаа бол хослол байхгүй.
+            return None  # No combo available if fewer than 5 cards in hand.
 
-        # Гаранд байгаа картыг эрэмбэлнэ
+        # Sort hand and find all five-card combos
         self.sort_hand()
-
-        # 5 хөзрийн хослолыг олох
         possible_combos = self.find_five_card_combos()
 
-        # Нөгөө тоглогчийн тоглосон хослолтой харьцуулж илүү хүчтэй хослолыг олно
+        # If no combo has been played by the opponent, play the strongest combo
+        if not last_played_combo:
+            return possible_combos[0] if possible_combos else None
+
+        # Find the first combo that is stronger than the last played combo
         for combo in possible_combos:
             if self.is_stronger_combo(combo, last_played_combo):
-                return combo  # Илүү хүчтэй хослол байвал түүнийг сонгоно
+                return combo  # Play this combo if it’s stronger
 
-        return None  # Илүү хүчтэй хослол олдохгүй бол None буцаана
+        return None  # No stronger combo found
+
+    
+    def is_stronger_combo(self, combo, other_combo):
+        """5 хөзрийн хослолыг харьцуулж хүчтэй эсэхийг тодорхойлно."""
+        combo_value = self.evaluate_combo(combo)
+        other_combo_value = self.evaluate_combo(other_combo)
+        
+        return combo_value > other_combo_value
+
+    def evaluate_combo(self, combo):
+        """Хослолын үнэлгээг тодорхойлно."""
+        validator = FiveCardValidator(combo)
+        return validator.evaluate_hand()
+
 
     def find_five_card_combos(self):
-        """AI-ийн гар дахь боломжит 5 хөзрийн хослолуудыг олно."""
+        """AI-ийн гар дахь боломжит 5 хөзрийн хослолуудыг илүү хурдан олно."""
         combos = []
-
-        # AI-ийн гарын бүх 5 картын комбинацийг шалгана
-        for i in range(len(self.hand)):
-            for j in range(i + 1, len(self.hand)):
-                for k in range(j + 1, len(self.hand)):
-                    for l in range(k + 1, len(self.hand)):
-                        for m in range(l + 1, len(self.hand)):
-                            combo = [self.hand[i], self.hand[j], self.hand[k], self.hand[l], self.hand[m]]
-                            validator = FiveCardValidator(combo)
-                            if validator.evaluate_hand() > 0:
-                                combos.append(combo)
-
+        
+        # 5 картын бүх боломжит хослолыг шалгаж, хүчтэй хослолыг олно
+        for combo in combinations(self.hand, 5):
+            validator = FiveCardValidator(combo)
+            if validator.evaluate_hand() > 0:  # Хэрэв хослолын үнэлгээ 0-ээс их байвал хүчтэй хослол байна
+                combos.append(combo)
+        
         return combos
 
 class Table:
@@ -323,10 +390,18 @@ class CardGameApp:
         self.root = root
         self.root.title("Simple Card Game")
         self.root.geometry("1000x800")
-        
+        # Store the PhotoImage object as an instance variable
+        image = Image.open("assets/table.png")
+        resized_image = image.resize((1000, 800), Image.LANCZOS)
+        self.bg = ImageTk.PhotoImage(resized_image)
+
+        # Set the resized image as background
+        self.my_label = tk.Label(root, image=self.bg)
+        self.my_label.place(x=0, y=0, relheight=1, relwidth=1)
+
         # UI Components
-        self.player_label = tk.Label(root, text="")
-        self.player_label.pack(pady=10)
+        self.player_label = tk.Label(root, text="13CARD GAME")
+        self.player_label.pack(pady=50)
 
         self.ai_label = tk.Label(root, text="AI's Hand")
         self.ai_label.pack()
@@ -337,16 +412,17 @@ class CardGameApp:
         self.played_cards_frame.pack(pady=20)
 
         self.player_hand_label = tk.Label(root, text="Your Hand")
-        self.player_hand_label.pack()
+        self.player_hand_label.place(y=600,x=480)
         self.hand_frame = tk.Frame(root)
-        self.hand_frame.pack(pady=10)
+        self.hand_frame.place(y=480,x=150)
 
+        play_card =  PhotoImage(file='assets/play_card.png')
         self.play_button = tk.Button(root, text="Play Card", command=self.play_card, state=tk.DISABLED)
-        self.play_button.pack()
+        self.play_button.place(y=700,x=350)
+        # bttn(root,850, 400, 'assets/play_card.png','assets/play_card_hover.png',lambda: self.play_card)
 
         self.pass_button = tk.Button(root, text="Pass", command=self.pass_card)
-        self.pass_button.pack(pady=10)
-
+        self.pass_button.place(y=700,x=600)
         # Create a deck and deal cards to players
         self.deck = Deck()
         hands = self.deck.deal()
@@ -375,11 +451,11 @@ class CardGameApp:
         # Display the player's hand
         for i, card in enumerate(player.hand):
             image = Image.open(card.image_path)
-            image = image.resize((60, 100), Image.LANCZOS)
+            image = image.resize((50, 80), Image.LANCZOS)
             photo = ImageTk.PhotoImage(image)
             card_button = tk.Button(frame, image=photo, command=lambda c=card: self.toggle_card_selection(c))
             card_button.image = photo  # Prevent garbage collection
-            card_button.grid(row=0, column=i)
+            card_button.grid(row=5, column=i)
 
     def ai_show_hand(self, player, frame):
         for widget in frame.winfo_children():
@@ -388,7 +464,7 @@ class CardGameApp:
         # Show the back of the card for the opponent
         for i in range(len(player.hand)):
             image = Image.open('cards/card_back.png')
-            image = image.resize((60, 100), Image.LANCZOS)
+            image = image.resize((50, 80), Image.LANCZOS)
             photo = ImageTk.PhotoImage(image)
             card_label = tk.Label(frame, image=photo)
             card_label.image = photo  # Prevent garbage collection
@@ -455,11 +531,7 @@ class CardGameApp:
                     self.table.played_cards.clear()
                     print("is_same_suit")
                     for card in self.selected_cards:
-                        self.table.place_card(self.human_player, card[0])
-                        self.table.place_card(self.human_player, card[1])
-                        self.table.place_card(self.human_player, card[2])
-                        self.table.place_card(self.human_player, card[3])
-                        self.table.place_card(self.human_player, card[4])
+                        self.table.place_card(self.human_player, card)
                     self.selected_cards.clear()
                     #self.selected_card_label.config(text="5 cards played.")
                 elif validator.is_sequence():
@@ -597,9 +669,11 @@ class CardGameApp:
 
         # AI plays immediately after the human
         print(f"AI's hand before playing: {self.ai_player.show_hand()}") 
-        print("тоглогчийн тоглосон газар",self.table.played_cards) # Debug output
-        self.ai_play(self.table.played_cards)
+        print("тоглогчийн тоглосон газар",self.table.played_cards)
+         # Debug output
         self.check_game_over()
+        self.ai_play(self.table.played_cards)
+        
             # for card in self.selected_cards:
             #     self.table.place_card(self.human_player, card)
             # messagebox.showinfo("Played Card", f"You played: {', '.join(map(str, self.selected_cards))}")
@@ -619,22 +693,24 @@ class CardGameApp:
             print("played_card:", played_card)
             self.table.place_card(self.ai_player, played_card)
             messagebox.showinfo("AI Played Card", f"AI played: {played_card}")
-            print("тоглогчийн тоглосон хөзөр:",self.table.played_cards)
-            print("тоглогчийн тоглосон хөзрийн хэмжээ:",len(self.table.played_cards))
+            print("2.тоглогчийн тоглосон хөзөр:",self.table.played_cards)
+            print("2.тоглогчийн тоглосон хөзрийн хэмжээ:",len(self.table.played_cards))
             self.update_ui()
             self.update_played_cards()
             self.check_game_over()
-        else:
+        elif not played_card:
             self.pass_card()
             print("AI passed")
-    
+        else:
+            self.pass_card()
+            print("AI passed")  
     
     def check_game_over(self):
         if not self.human_player.hand:
-            messagebox.showinfo("Game Over", "You have no cards left! AI wins!")
+            messagebox.showinfo("Game Over", "You wins!")
             self.root.quit()
         elif not self.ai_player.hand:
-            messagebox.showinfo("Game Over", "AI has no cards left! You win!")
+            messagebox.showinfo("Game Over", "AI wins!")
             self.root.quit()
 
     def update_played_cards(self):
