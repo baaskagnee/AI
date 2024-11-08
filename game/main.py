@@ -630,4 +630,4 @@ class ThirteenGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     game = ThirteenGameGUI(root)
-    root.mainloop()
+    root.mainloop() 
