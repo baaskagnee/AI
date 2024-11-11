@@ -1,9 +1,8 @@
-# Ajillad baiga gui
+
 import tkinter as tk
 from tkinter import messagebox, Button,PhotoImage,Label
 import random
 from PIL import Image, ImageTk
-from collections import defaultdict
 from itertools import combinations
 
 # Define card values and suits
@@ -97,67 +96,81 @@ class Player:
 class FiveCardValidator:
     def __init__(self, cards):
         self.cards = cards
+        if len(cards) not in [1, 2, 3, 5]:
+            raise ValueError("Hand must contain 1, 2, 3, or 5 cards.")
 
     def is_sequence(self):
+        """Check if the selected cards form a consecutive sequence."""
         values = sorted([VALUES[card.value] for card in self.cards])
         return all(values[i] + 1 == values[i + 1] for i in range(len(values) - 1))
 
     def is_same_suit(self):
+        """Check if all cards have the same suit."""
         return all(card.suit == self.cards[0].suit for card in self.cards)
 
     def is_poker(self):
-        value_counts = {}
+        """Check if the hand contains Four of a Kind."""
+        value_counts = {card.value: 0 for card in self.cards}
         for card in self.cards:
-            value_counts[card.value] = value_counts.get(card.value, 0) + 1
+            value_counts[card.value] += 1
         return 4 in value_counts.values()
 
     def is_fullHouse(self):
-        value_counts = {}
+        """Check if the hand contains a Full House."""
+        value_counts = {card.value: 0 for card in self.cards}
         for card in self.cards:
-            value_counts[card.value] = value_counts.get(card.value, 0) + 1
+            value_counts[card.value] += 1
         counts = list(value_counts.values())
         return sorted(counts) == [2, 3]
 
     def is_straightFlush(self):
+        """Check if the hand is a Straight Flush."""
         return self.is_sequence() and self.is_same_suit()
 
-    def evaluate_hand(self):
-        if self.is_straightFlush():
-            return 8  # Highest hand: Straight Flush
-        elif self.is_poker():
-            return 7  # Four of a Kind
-        elif self.is_fullHouse():
-            return 6  # Full House
-        elif self.is_same_suit():
-            return 5  # Flush
-        elif self.is_sequence():
-            return 4  # Straight
-        elif self.is_three_of_a_kind():
-            return 3  # Three of a Kind
-        elif self.is_two_pair():
-            return 2  # Two Pair
-        elif self.is_one_pair():
-            return 1  # One Pair
-        else:
-            return 0  # High Card
-
     def is_three_of_a_kind(self):
-        value_counts = {}
+        """Check if the hand is Three of a Kind (only for 3-card hands)."""
+        value_counts = {card.value: 0 for card in self.cards}
         for card in self.cards:
-            value_counts[card.value] = value_counts.get(card.value, 0) + 1
-        return 3 in value_counts.values() and len(value_counts) > 2
+            value_counts[card.value] += 1
+        return 3 in value_counts.values() and len(value_counts) == 3
 
     def is_two_pair(self):
-        value_counts = {}
+        """Check if the hand contains Two Pair (only for 2-card hands)."""
+        value_counts = {card.value: 0 for card in self.cards}
         for card in self.cards:
-            value_counts[card.value] = value_counts.get(card.value, 0) + 1
+            value_counts[card.value] += 1
         return list(value_counts.values()).count(2) == 2
 
     def is_one_pair(self):
-        value_counts = {}
+        """Check if the hand contains a single Pair (only for 2-card hands)."""
+        value_counts = {card.value: 0 for card in self.cards}
         for card in self.cards:
-            value_counts[card.value] = value_counts.get(card.value, 0) + 1
+            value_counts[card.value] += 1
         return 2 in value_counts.values()
+
+    def evaluate_hand(self):
+        """Evaluate and rank the hand based on card count."""
+        if len(self.cards) == 5:
+            if self.is_straightFlush():
+                return 8  # Straight Flush
+            elif self.is_poker():
+                return 7  # Four of a Kind
+            elif self.is_fullHouse():
+                return 6  # Full House
+            elif self.is_same_suit():
+                return 5  # Flush
+            elif self.is_sequence():
+                return 4  # Straight
+        elif len(self.cards) == 3:
+            if self.is_three_of_a_kind():
+                return 3  # Three of a Kind
+        elif len(self.cards) == 2:
+            if self.is_two_pair():
+                return 2  # Two Pair
+            elif self.is_one_pair():
+                return 1  # One Pair
+        return 0  # High Card
+
 class AICardManager(Player):
     def __init__(self, name, hand):
         super().__init__(name, hand)
@@ -309,6 +322,7 @@ class AICardManager(Player):
         # Sort hand and find all five-card combos
         self.sort_hand()
         possible_combos = self.find_five_card_combos()
+        
 
         # If no combo has been played by the opponent, play the strongest combo
         if not last_played_combo:
@@ -342,7 +356,7 @@ class AICardManager(Player):
         # 5 картын бүх боломжит хослолыг шалгаж, хүчтэй хослолыг олно
         for combo in combinations(self.hand, 5):
             validator = FiveCardValidator(combo)
-            if validator.evaluate_hand() > 0:  # Хэрэв хослолын үнэлгээ 0-ээс их байвал хүчтэй хослол байна
+            if validator.evaluate_hand() >  0:  # Хэрэв хослолын үнэлгээ 0-ээс их байвал хүчтэй хослол байна
                 combos.append(combo)
         
         return combos
@@ -362,6 +376,7 @@ class Table:
                     self.played_cards.append(card)
                     print(f"Card {card} added to the table.")
                 else:
+                    print("df")
                     print(f"Card {card} not found in {player.name}'s hand.")
         elif cards:  # If a single card was passed, convert to list and process
             if cards in player.hand:
@@ -369,6 +384,7 @@ class Table:
                 self.played_cards.append(cards)
                 print(f"Card {cards} added to the table.")
             else:
+                print("rtr")
                 print(f"Card {cards} not found in {player.name}'s hand.")
         else:
             print("No valid cards to play.")
@@ -485,6 +501,11 @@ class CardGameApp:
     def pass_card(self):
         self.table.played_cards.clear()
         self.ai_play(self.table.played_cards)
+        self.update_ui()
+        self.update_played_cards()
+
+    def ai_pass_card(self):
+        self.table.played_cards.clear()
         self.update_ui()
         self.update_played_cards()
 
@@ -702,7 +723,7 @@ class CardGameApp:
             self.pass_card()
             print("AI passed")
         else:
-            self.pass_card()
+            self.ai_pass_card()
             print("AI passed")  
     
     def check_game_over(self):
